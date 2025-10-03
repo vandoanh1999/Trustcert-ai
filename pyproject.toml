@@ -1,0 +1,14 @@
+[project]
+name = "trustcert-ai"
+version = "0.1.0"
+description = "TrustCert AI - hệ thống cam kết và chứng nhận thông minh"
+authors = [{name="Doanh", email="phamvandoanh9@gmail.com"}]
+readme = "README.md"
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+where = ["apps"]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
