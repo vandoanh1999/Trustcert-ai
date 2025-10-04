@@ -3,6 +3,43 @@ from pathlib import Path
 readme_content = """# 🧠 TrustCert AI — Intelligent Verification Framework  
 ### *Developed & Maintained by Doanh1102*
 
+[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/vandoanh1999/Trustcert-ai)
+[![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-27%20passing-brightgreen.svg)](tests/)
+
+---
+
+## ⚡ Quick Start
+
+```bash
+# Clone the repository
+git clone https://github.com/vandoanh1999/Trustcert-ai.git
+cd Trustcert-ai
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the demo
+PYTHONPATH=. python examples/asa_fusion_demo.py
+
+# Run tests
+pytest tests/ -v
+```
+
+### 🎯 Simple Example
+
+```python
+from apps.asa_fusion import ASAFusionEngine
+
+# Initialize engine
+engine = ASAFusionEngine()
+
+# Solve a problem
+result = engine.solve("x = 42")
+print(f"Solution: {result['model']}")  # {'x': 42}
+print(f"Solver: {result['solver']}")   # 'presburger'
+```
+
 ---
 
 ## 🚀 Giới thiệu
