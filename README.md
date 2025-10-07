@@ -3,43 +3,6 @@ from pathlib import Path
 readme_content = """# 🧠 TrustCert AI — Intelligent Verification Framework  
 ### *Developed & Maintained by Doanh1102*
 
-[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/vandoanh1999/Trustcert-ai)
-[![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-27%20passing-brightgreen.svg)](tests/)
-
----
-
-## ⚡ Quick Start
-
-```bash
-# Clone the repository
-git clone https://github.com/vandoanh1999/Trustcert-ai.git
-cd Trustcert-ai
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the demo
-PYTHONPATH=. python examples/asa_fusion_demo.py
-
-# Run tests
-pytest tests/ -v
-```
-
-### 🎯 Simple Example
-
-```python
-from apps.asa_fusion import ASAFusionEngine
-
-# Initialize engine
-engine = ASAFusionEngine()
-
-# Solve a problem
-result = engine.solve("x = 42")
-print(f"Solution: {result['model']}")  # {'x': 42}
-print(f"Solver: {result['solver']}")   # 'presburger'
-```
-
 ---
 
 ## 🚀 Giới thiệu
@@ -58,40 +21,19 @@ Mục tiêu:
 Trustcert-ai/
 │
 ├── apps/
-│   ├── api/
-│   │   └── main.py                # Core API khởi chạy FastAPI
-│   │
-│   └── asa_fusion/                # ASA-Fusion v2.0 Framework
-│       ├── __init__.py            # Main exports
-│       ├── engine.py              # Main orchestration engine
-│       │
-│       ├── core/                  # Core interfaces
-│       │   ├── interfaces.py      # DecisionProcedure interface
-│       │   └── registry.py        # Plugin registry
-│       │
-│       ├── plugins/               # Built-in decision procedures
-│       │   ├── presburger.py      # Presburger arithmetic
-│       │   └── diophantine.py     # Diophantine equations
-│       │
-│       ├── solvers/               # External solver integrations
-│       │   └── z3_solver.py       # Z3 SMT solver
-│       │
-│       ├── ai_layer/              # AI reasoning
-│       │   └── analyzer.py        # Problem classification
-│       │
-│       └── security/              # Security features
-│           ├── validator.py       # Input validation
-│           └── sandbox.py         # Sandboxed execution
+│   └── api/
+│       ├── main.py          # Core API khởi chạy FastAPI
+│       ├── middleware/      # Các lớp bảo vệ và xác thực request
+│       └── routes/          # Định nghĩa endpoint (sign, verify, health, v.v.)
 │
 ├── tests/
-│   ├── test_main.py               # API tests
-│   └── test_asa_fusion.py         # ASA-Fusion tests
+│   ├── test_main.py         # Kiểm thử endpoint chính
+│   └── test_api.py          # Kiểm thử module xác thực
 │
-├── LICENSE                        # Proprietary license
-├── requirements.txt               # Dependencies
-├── pyproject.toml                 # Project config
-├── Dockerfile                     # Container deployment
-└── README.md                      # This file
+├── requirements.txt         # Danh sách dependencies
+├── pyproject.toml           # Mô tả project & build config
+├── Dockerfile               # Triển khai container
+└── README.md                # Tài liệu mô tả (file này)
 ```
 
 ---
@@ -168,83 +110,18 @@ web: uvicorn apps.api.main:app --host 0.0.0.0 --port $PORT
 ## 🧤 Tác giả & Giấy phép
 
 **Author:** [Doanh1102](https://github.com/vandoanh1999)  
-**License:** Proprietary (see LICENSE file)  
-**Version:** 2.0.0  
-**Keywords:** AI Verification, Trustworthy Computing, FastAPI, SMT Solver, ASA-Fusion.
-
-⚠️ **IMPORTANT NOTICE:** This software is proprietary and protected by copyright.  
-For commercial use or licensing inquiries, contact: phamvandoanh9@gmail.com
-
----
-
-## 🚀 ASA-Fusion v2.0 - Breakthrough Features
-
-**NEW in v2.0:** Advanced SMT solving framework with AI reasoning!
-
-### Core Features:
-1. **🔌 Plugin Architecture**
-   - Dynamic decision procedure loading
-   - Standard interface for custom solvers
-   - Support for Presburger arithmetic, Diophantine equations, and more
-
-2. **🤖 AI Reasoning Layer**
-   - Automatic problem type detection
-   - Intelligent solver recommendation
-   - Complexity analysis and optimization hints
-
-3. **⚡ Hybrid Solver Fallback**
-   - Built-in procedures for common problem types
-   - Automatic fallback to Z3 SMT solver for complex problems
-   - Configurable solver priority and timeout
-
-4. **🔒 Security & Protection**
-   - Input validation and sanitization
-   - Dangerous pattern detection
-   - Sandboxed execution with timeouts
-   - Memory limits and resource control
-
-5. **📊 High Performance**
-   - Multi-threaded execution support
-   - Efficient problem classification
-   - Optimized solver selection
-
-### ASA-Fusion Usage Example:
-
-```python
-from apps.asa_fusion import ASAFusionEngine
-
-# Initialize the engine
-engine = ASAFusionEngine()
-
-# Solve a problem
-result = engine.solve("x + y = 10 and x > 0")
-
-print(f"Satisfiable: {result['satisfiable']}")
-print(f"Solver used: {result['solver']}")
-print(f"AI Analysis: {result['ai_analysis']}")
-```
-
-### Security Features:
-- **Input Validation:** Blocks dangerous patterns (eval, exec, file access)
-- **Sandboxing:** Resource-limited execution environment
-- **Timeouts:** Prevents infinite loops and DoS attacks
-- **Memory Limits:** Controls resource consumption
+**License:** MIT  
+**Version:** 1.0.0  
+**Keywords:** AI Verification, Trustworthy Computing, FastAPI, Quantum Proof System.
 
 ---
 
 ## 💡 Định hướng phát triển
 
-- [x] ASA-Fusion v2.0 with modular architecture ✅
-- [x] AI reasoning layer for problem classification ✅
-- [x] Z3 solver integration ✅
-- [x] Security features and sandboxing ✅
-- [ ] WebAssembly/Pyodide support for browser execution
-- [ ] RESTful/GraphQL API for ASA-Fusion
-- [ ] Commercial licensing and premium features
-- [ ] Thêm mô-đun chứng chỉ ký bằng RSA/ECDSA
-- [ ] Tích hợp với Blockchain để lưu vết xác thực
-- [ ] Phát hành bản Premium có API key bảo mật & hạn ngạch test
-- [ ] Kết nối hệ sinh thái **GenesisZero** để xác thực đa tầng
+- [ ] Thêm mô-đun chứng chỉ ký bằng RSA/ECDSA.  
+- [ ] Tích hợp với Blockchain để lưu vết xác thực.  
+- [ ] Phát hành bản Premium có API key bảo mật & hạn ngạch test.  
+- [ ] Kết nối hệ sinh thái **GenesisZero** để xác thực đa tầng.  
 """
 
 path = Path("README.md")
