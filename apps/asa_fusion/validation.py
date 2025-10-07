@@ -258,6 +258,6 @@ class InputValidator:
         value = value.replace('\x00', '')
         
         # Remove control characters except newline and tab
-        value = ''.join(char for char in value if char in '\n\t' or not char.isprintable() == False)
+        value = ''.join(char for char in value if char.isprintable() or char in '\n\t')
         
         return value.strip()
