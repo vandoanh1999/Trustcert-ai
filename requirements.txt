@@ -3,7 +3,3 @@ uvicorn[standard]==0.32.0
 pydantic==2.9.0
 pytest==8.3.3
 httpx==0.27.2
-
-# Optional: External solver integration
-# Uncomment for Z3 support (recommended for production)
-# z3-solver==4.12.2.0
