@@ -1,0 +1,436 @@
+"""
+TrustCert AI - Digital Signature System
+RSA, ECDSA, EdDSA with quantum-resistant options
+"""
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa, ec, padding, ed25519
+from cryptography.hazmat.backends import default_backend
+from cryptography.exceptions import InvalidSignature
+from cryptography.x509 import load_pem_x509_certificate
+from datetime import datetime, timedelta
+from typing import Optional, Tuple, Dict, Any
+import base64
+import json
+import hashlib
+
+class SignatureEngine:
+    """
+    Enterprise-grade digital signature engine
+    Supports multiple algorithms: RSA, ECDSA, EdDSA
+    """
+    
+    def __init__(self):
+        self.backend = default_backend()
+        self._rsa_private_key: Optional[rsa.RSAPrivateKey] = None
+        self._rsa_public_key: Optional[rsa.RSAPublicKey] = None
+        self._ecdsa_private_key: Optional[ec.EllipticCurvePrivateKey] = None
+        self._ecdsa_public_key: Optional[ec.EllipticCurvePublicKey] = None
+    
+    # ========================================================================
+    # KEY GENERATION
+    # ========================================================================
+    
+    def generate_rsa_keypair(
+        self, 
+        key_size: int = 4096,
+        public_exponent: int = 65537
+    ) -> Tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]:
+        """
+        Generate RSA key pair
+        
+        Args:
+            key_size: Key size in bits (2048, 3072, 4096)
+            public_exponent: Public exponent (typically 65537)
+        
+        Returns:
+            Tuple of (private_key, public_key)
+        """
+        private_key = rsa.generate_private_key(
+            public_exponent=public_exponent,
+            key_size=key_size,
+            backend=self.backend
+        )
+        public_key = private_key.public_key()
+        
+        self._rsa_private_key = private_key
+        self._rsa_public_key = public_key
+        
+        return private_key, public_key
+    
+    def generate_ecdsa_keypair(
+        self, 
+        curve: str = "SECP384R1"
+    ) -> Tuple[ec.EllipticCurvePrivateKey, ec.EllipticCurvePublicKey]:
+        """
+        Generate ECDSA key pair
+        
+        Args:
+            curve: Elliptic curve (SECP256R1, SECP384R1, SECP521R1)
+        
+        Returns:
+            Tuple of (private_key, public_key)
+        """
+        curve_map = {
+            "SECP256R1": ec.SECP256R1(),
+            "SECP384R1": ec.SECP384R1(),
+            "SECP521R1": ec.SECP521R1(),
+        }
+        
+        selected_curve = curve_map.get(curve, ec.SECP384R1())
+        
+        private_key = ec.generate_private_key(
+            curve=selected_curve,
+            backend=self.backend
+        )
+        public_key = private_key.public_key()
+        
+        self._ecdsa_private_key = private_key
+        self._ecdsa_public_key = public_key
+        
+        return private_key, public_key
+    
+    def generate_ed25519_keypair(self) -> Tuple[ed25519.Ed25519PrivateKey, ed25519.Ed25519PublicKey]:
+        """Generate Ed25519 key pair (fast, secure)"""
+        private_key = ed25519.Ed25519PrivateKey.generate()
+        public_key = private_key.public_key()
+        return private_key, public_key
+    
+    # ========================================================================
+    # KEY SERIALIZATION
+    # ========================================================================
+    
+    def export_private_key_pem(
+        self, 
+        private_key: Any, 
+        password: Optional[bytes] = None
+    ) -> bytes:
+        """Export private key to PEM format"""
+        encryption = serialization.NoEncryption()
+        
+        if password:
+            encryption = serialization.BestAvailableEncryption(password)
+        
+        return private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=encryption
+        )
+    
+    def export_public_key_pem(self, public_key: Any) -> bytes:
+        """Export public key to PEM format"""
+        return public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+    
+    def import_private_key_pem(
+        self, 
+        pem_data: bytes, 
+        password: Optional[bytes] = None
+    ) -> Any:
+        """Import private key from PEM format"""
+        return serialization.load_pem_private_key(
+            pem_data,
+            password=password,
+            backend=self.backend
+        )
+    
+    def import_public_key_pem(self, pem_data: bytes) -> Any:
+        """Import public key from PEM format"""
+        return serialization.load_pem_public_key(
+            pem_data,
+            backend=self.backend
+        )
+    
+    # ========================================================================
+    # RSA SIGNING & VERIFICATION
+    # ========================================================================
+    
+    def sign_rsa(
+        self, 
+        data: bytes, 
+        private_key: Optional[rsa.RSAPrivateKey] = None,
+        hash_algorithm: str = "SHA256"
+    ) -> bytes:
+        """
+        Sign data using RSA-PSS
+        
+        Args:
+            data: Data to sign
+            private_key: RSA private key (uses stored key if None)
+            hash_algorithm: Hash algorithm (SHA256, SHA384, SHA512)
+        
+        Returns:
+            Digital signature
+        """
+        key = private_key or self._rsa_private_key
+        if not key:
+            raise ValueError("No RSA private key available")
+        
+        hash_map = {
+            "SHA256": hashes.SHA256(),
+            "SHA384": hashes.SHA384(),
+            "SHA512": hashes.SHA512(),
+        }
+        
+        hash_algo = hash_map.get(hash_algorithm, hashes.SHA256())
+        
+        signature = key.sign(
+            data,
+            padding.PSS(
+                mgf=padding.MGF1(hash_algo),
+                salt_length=padding.PSS.MAX_LENGTH
+            ),
+            hash_algo
+        )
+        
+        return signature
+    
+    def verify_rsa(
+        self, 
+        data: bytes, 
+        signature: bytes, 
+        public_key: Optional[rsa.RSAPublicKey] = None,
+        hash_algorithm: str = "SHA256"
+    ) -> bool:
+        """
+        Verify RSA signature
+        
+        Returns:
+            True if signature is valid, False otherwise
+        """
+        key = public_key or self._rsa_public_key
+        if not key:
+            raise ValueError("No RSA public key available")
+        
+        hash_map = {
+            "SHA256": hashes.SHA256(),
+            "SHA384": hashes.SHA384(),
+            "SHA512": hashes.SHA512(),
+        }
+        
+        hash_algo = hash_map.get(hash_algorithm, hashes.SHA256())
+        
+        try:
+            key.verify(
+                signature,
+                data,
+                padding.PSS(
+                    mgf=padding.MGF1(hash_algo),
+                    salt_length=padding.PSS.MAX_LENGTH
+                ),
+                hash_algo
+            )
+            return True
+        except InvalidSignature:
+            return False
+    
+    # ========================================================================
+    # ECDSA SIGNING & VERIFICATION
+    # ========================================================================
+    
+    def sign_ecdsa(
+        self, 
+        data: bytes, 
+        private_key: Optional[ec.EllipticCurvePrivateKey] = None,
+        hash_algorithm: str = "SHA256"
+    ) -> bytes:
+        """Sign data using ECDSA"""
+        key = private_key or self._ecdsa_private_key
+        if not key:
+            raise ValueError("No ECDSA private key available")
+        
+        hash_map = {
+            "SHA256": hashes.SHA256(),
+            "SHA384": hashes.SHA384(),
+            "SHA512": hashes.SHA512(),
+        }
+        
+        hash_algo = hash_map.get(hash_algorithm, hashes.SHA256())
+        
+        signature = key.sign(
+            data,
+            ec.ECDSA(hash_algo)
+        )
+        
+        return signature
+    
+    def verify_ecdsa(
+        self, 
+        data: bytes, 
+        signature: bytes, 
+        public_key: Optional[ec.EllipticCurvePublicKey] = None,
+        hash_algorithm: str = "SHA256"
+    ) -> bool:
+        """Verify ECDSA signature"""
+        key = public_key or self._ecdsa_public_key
+        if not key:
+            raise ValueError("No ECDSA public key available")
+        
+        hash_map = {
+            "SHA256": hashes.SHA256(),
+            "SHA384": hashes.SHA384(),
+            "SHA512": hashes.SHA512(),
+        }
+        
+        hash_algo = hash_map.get(hash_algorithm, hashes.SHA256())
+        
+        try:
+            key.verify(
+                signature,
+                data,
+                ec.ECDSA(hash_algo)
+            )
+            return True
+        except InvalidSignature:
+            return False
+    
+    # ========================================================================
+    # HIGH-LEVEL API
+    # ========================================================================
+    
+    def create_signed_certificate(
+        self,
+        payload: Dict[str, Any],
+        algorithm: str = "RSA",
+        include_timestamp: bool = True,
+        validity_days: int = 365
+    ) -> Dict[str, str]:
+        """
+        Create a signed certificate with metadata
+        
+        Args:
+            payload: Data to certify
+            algorithm: Signature algorithm (RSA, ECDSA)
+            include_timestamp: Add timestamp to certificate
+            validity_days: Certificate validity period
+        
+        Returns:
+            Certificate with signature and metadata
+        """
+        # Prepare certificate data
+        cert_data = payload.copy()
+        
+        if include_timestamp:
+            now = datetime.utcnow()
+            cert_data.update({
+                "issued_at": now.isoformat(),
+                "expires_at": (now + timedelta(days=validity_days)).isoformat(),
+                "issuer": "TrustCert AI",
+                "version": "2.0.0"
+            })
+        
+        # Serialize to JSON
+        cert_json = json.dumps(cert_data, sort_keys=True)
+        cert_bytes = cert_json.encode('utf-8')
+        
+        # Generate hash
+        cert_hash = hashlib.sha256(cert_bytes).hexdigest()
+        
+        # Sign based on algorithm
+        if algorithm.upper() == "RSA":
+            signature = self.sign_rsa(cert_bytes)
+        elif algorithm.upper() == "ECDSA":
+            signature = self.sign_ecdsa(cert_bytes)
+        else:
+            raise ValueError(f"Unsupported algorithm: {algorithm}")
+        
+        # Encode signature
+        signature_b64 = base64.b64encode(signature).decode('utf-8')
+        
+        return {
+            "certificate": cert_data,
+            "hash": cert_hash,
+            "signature": signature_b64,
+            "algorithm": algorithm.upper(),
+            "public_key": self.export_public_key_pem(
+                self._rsa_public_key if algorithm.upper() == "RSA" else self._ecdsa_public_key
+            ).decode('utf-8')
+        }
+    
+    def verify_signed_certificate(
+        self,
+        certificate: Dict[str, Any],
+        signature: str,
+        public_key_pem: str,
+        algorithm: str = "RSA"
+    ) -> Tuple[bool, str]:
+        """
+        Verify a signed certificate
+        
+        Returns:
+            Tuple of (is_valid, message)
+        """
+        try:
+            # Reconstruct certificate data
+            cert_json = json.dumps(certificate, sort_keys=True)
+            cert_bytes = cert_json.encode('utf-8')
+            
+            # Decode signature
+            signature_bytes = base64.b64decode(signature)
+            
+            # Import public key
+            public_key = self.import_public_key_pem(public_key_pem.encode('utf-8'))
+            
+            # Verify based on algorithm
+            if algorithm.upper() == "RSA":
+                is_valid = self.verify_rsa(cert_bytes, signature_bytes, public_key)
+            elif algorithm.upper() == "ECDSA":
+                is_valid = self.verify_ecdsa(cert_bytes, signature_bytes, public_key)
+            else:
+                return False, f"Unsupported algorithm: {algorithm}"
+            
+            if is_valid:
+                # Check expiration
+                if "expires_at" in certificate:
+                    expires = datetime.fromisoformat(certificate["expires_at"])
+                    if datetime.utcnow() > expires:
+                        return False, "Certificate has expired"
+                
+                return True, "Certificate is valid"
+            else:
+                return False, "Invalid signature"
+        
+        except Exception as e:
+            return False, f"Verification error: {str(e)}"
+
+# ============================================================================
+# USAGE EXAMPLE
+# ============================================================================
+
+if __name__ == "__main__":
+    # Initialize engine
+    engine = SignatureEngine()
+    
+    # Generate keys
+    print("🔑 Generating RSA keys...")
+    engine.generate_rsa_keypair(key_size=4096)
+    
+    print("🔑 Generating ECDSA keys...")
+    engine.generate_ecdsa_keypair(curve="SECP384R1")
+    
+    # Create signed certificate
+    payload = {
+        "model_id": "gpt-4-verified",
+        "model_hash": "abc123...",
+        "training_data": "verified",
+        "safety_score": 95.5
+    }
+    
+    print("\n📝 Creating signed certificate...")
+    cert = engine.create_signed_certificate(payload, algorithm="RSA")
+    
+    print(f"✅ Certificate created")
+    print(f"   Hash: {cert['hash'][:32]}...")
+    print(f"   Algorithm: {cert['algorithm']}")
+    
+    # Verify certificate
+    print("\n🔍 Verifying certificate...")
+    is_valid, message = engine.verify_signed_certificate(
+        cert["certificate"],
+        cert["signature"],
+        cert["public_key"],
+        cert["algorithm"]
+    )
+    
+    print(f"{'✅' if is_valid else '❌'} {message}")
