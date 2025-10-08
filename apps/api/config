@@ -1,0 +1,355 @@
+"""
+TrustCert AI - Configuration Management
+Secure, environment-based configuration with Pydantic
+"""
+from pydantic_settings import BaseSettings
+from pydantic import Field, validator, SecretStr
+from typing import List, Optional
+from functools import lru_cache
+import os
+from pathlib import Path
+
+class Settings(BaseSettings):
+    """
+    Application settings with environment variable support
+    All sensitive data uses SecretStr for security
+    """
+    
+    # ========================================================================
+    # APPLICATION CONFIG
+    # ========================================================================
+    APP_NAME: str = "TrustCert AI"
+    APP_VERSION: str = "2.0.0"
+    ENVIRONMENT: str = Field(default="development", env="ENVIRONMENT")
+    DEBUG: bool = Field(default=False, env="DEBUG")
+    
+    # API Configuration
+    API_V1_PREFIX: str = "/api/v1"
+    API_TITLE: str = "TrustCert AI API"
+    
+    # Server
+    HOST: str = Field(default="0.0.0.0", env="HOST")
+    PORT: int = Field(default=8000, env="PORT")
+    WORKERS: int = Field(default=4, env="WORKERS")
+    
+    # CORS
+    ALLOWED_ORIGINS: List[str] = Field(
+        default=["http://localhost:3000", "http://localhost:8000"],
+        env="ALLOWED_ORIGINS"
+    )
+    
+    @validator("ALLOWED_ORIGINS", pre=True)
+    def parse_cors_origins(cls, v):
+        if isinstance(v, str):
+            return [origin.strip() for origin in v.split(",")]
+        return v
+    
+    # ========================================================================
+    # SECURITY CONFIG
+    # ========================================================================
+    SECRET_KEY: SecretStr = Field(..., env="SECRET_KEY")
+    JWT_SECRET_KEY: SecretStr = Field(..., env="JWT_SECRET_KEY")
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    
+    # API Keys
+    API_KEY_HEADER: str = "X-API-Key"
+    ADMIN_API_KEY: SecretStr = Field(..., env="ADMIN_API_KEY")
+    
+    # Rate Limiting
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_PER_MINUTE: int = 60
+    RATE_LIMIT_PER_HOUR: int = 1000
+    
+    # ========================================================================
+    # DATABASE CONFIG
+    # ========================================================================
+    DATABASE_URL: SecretStr = Field(
+        default="postgresql://user:pass@localhost:5432/trustcert",
+        env="DATABASE_URL"
+    )
+    DB_POOL_SIZE: int = 20
+    DB_MAX_OVERFLOW: int = 10
+    DB_POOL_TIMEOUT: int = 30
+    
+    # ========================================================================
+    # REDIS CONFIG (Caching & Queue)
+    # ========================================================================
+    REDIS_URL: str = Field(default="redis://localhost:6379/0", env="REDIS_URL")
+    REDIS_MAX_CONNECTIONS: int = 50
+    CACHE_TTL_SECONDS: int = 3600
+    
+    # ========================================================================
+    # BLOCKCHAIN CONFIG
+    # ========================================================================
+    # Ethereum
+    ETH_RPC_URL: SecretStr = Field(
+        default="https://mainnet.infura.io/v3/YOUR_INFURA_KEY",
+        env="ETH_RPC_URL"
+    )
+    ETH_CHAIN_ID: int = Field(default=1, env="ETH_CHAIN_ID")  # 1=mainnet, 5=goerli
+    ETH_PRIVATE_KEY: Optional[SecretStr] = Field(None, env="ETH_PRIVATE_KEY")
+    
+    # Smart Contracts
+    REGISTRY_CONTRACT_ADDRESS: Optional[str] = Field(None, env="REGISTRY_CONTRACT_ADDRESS")
+    NFT_CONTRACT_ADDRESS: Optional[str] = Field(None, env="NFT_CONTRACT_ADDRESS")
+    
+    # IPFS
+    IPFS_GATEWAY_URL: str = Field(
+        default="https://ipfs.io/ipfs/",
+        env="IPFS_GATEWAY_URL"
+    )
+    IPFS_API_URL: str = Field(
+        default="https://api.pinata.cloud",
+        env="IPFS_API_URL"
+    )
+    IPFS_API_KEY: Optional[SecretStr] = Field(None, env="IPFS_API_KEY")
+    IPFS_SECRET_KEY: Optional[SecretStr] = Field(None, env="IPFS_SECRET_KEY")
+    
+    # ========================================================================
+    # CRYPTOGRAPHY CONFIG
+    # ========================================================================
+    # Key Paths
+    RSA_PRIVATE_KEY_PATH: Optional[Path] = Field(None, env="RSA_PRIVATE_KEY_PATH")
+    RSA_PUBLIC_KEY_PATH: Optional[Path] = Field(None, env="RSA_PUBLIC_KEY_PATH")
+    ECDSA_PRIVATE_KEY_PATH: Optional[Path] = Field(None, env="ECDSA_PRIVATE_KEY_PATH")
+    ECDSA_PUBLIC_KEY_PATH: Optional[Path] = Field(None, env="ECDSA_PUBLIC_KEY_PATH")
+    
+    # Encryption
+    ENCRYPTION_ALGORITHM: str = "AES-256-GCM"
+    KEY_DERIVATION_ITERATIONS: int = 100000
+    
+    # ========================================================================
+    # ML/AI CONFIG
+    # ========================================================================
+    # Model Verification
+    MODEL_HASH_ALGORITHM: str = "SHA3-256"
+    ENABLE_BIAS_DETECTION: bool = True
+    ENABLE_ADVERSARIAL_TESTING: bool = True
+    ENABLE_EXPLAINABILITY: bool = True
+    
+    # ML Models Storage
+    ML_MODELS_PATH: Path = Field(default=Path("./models"), env="ML_MODELS_PATH")
+    
+    # External AI APIs
+    OPENAI_API_KEY: Optional[SecretStr] = Field(None, env="OPENAI_API_KEY")
+    ANTHROPIC_API_KEY: Optional[SecretStr] = Field(None, env="ANTHROPIC_API_KEY")
+    
+    # ========================================================================
+    # MONITORING & LOGGING
+    # ========================================================================
+    LOG_LEVEL: str = Field(default="INFO", env="LOG_LEVEL")
+    LOG_FORMAT: str = "json"  # json or text
+    ENABLE_REQUEST_LOGGING: bool = True
+    
+    # Sentry (Error Tracking)
+    SENTRY_DSN: Optional[SecretStr] = Field(None, env="SENTRY_DSN")
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.1
+    
+    # Prometheus
+    ENABLE_METRICS: bool = True
+    METRICS_PORT: int = 9090
+    
+    # ========================================================================
+    # CELERY (Background Tasks)
+    # ========================================================================
+    CELERY_BROKER_URL: str = Field(
+        default="redis://localhost:6379/1",
+        env="CELERY_BROKER_URL"
+    )
+    CELERY_RESULT_BACKEND: str = Field(
+        default="redis://localhost:6379/2",
+        env="CELERY_RESULT_BACKEND"
+    )
+    
+    # ========================================================================
+    # EMAIL CONFIG (Notifications)
+    # ========================================================================
+    SMTP_HOST: Optional[str] = Field(None, env="SMTP_HOST")
+    SMTP_PORT: Optional[int] = Field(587, env="SMTP_PORT")
+    SMTP_USER: Optional[str] = Field(None, env="SMTP_USER")
+    SMTP_PASSWORD: Optional[SecretStr] = Field(None, env="SMTP_PASSWORD")
+    EMAIL_FROM: str = Field(default="noreply@trustcert.ai", env="EMAIL_FROM")
+    
+    # ========================================================================
+    # STORAGE CONFIG
+    # ========================================================================
+    # S3 or MinIO for large files
+    S3_BUCKET: Optional[str] = Field(None, env="S3_BUCKET")
+    S3_ACCESS_KEY: Optional[SecretStr] = Field(None, env="S3_ACCESS_KEY")
+    S3_SECRET_KEY: Optional[SecretStr] = Field(None, env="S3_SECRET_KEY")
+    S3_REGION: str = Field(default="us-east-1", env="S3_REGION")
+    S3_ENDPOINT: Optional[str] = Field(None, env="S3_ENDPOINT")
+    
+    # ========================================================================
+    # TRUST SCORE CONFIG
+    # ========================================================================
+    TRUST_SCORE_WEIGHTS: dict = {
+        "cryptographic_integrity": 0.25,
+        "provenance_verification": 0.20,
+        "ml_safety_score": 0.20,
+        "blockchain_confirmation": 0.15,
+        "reputation_score": 0.10,
+        "community_validation": 0.10
+    }
+    
+    MIN_TRUST_SCORE: float = 0.0
+    MAX_TRUST_SCORE: float = 100.0
+    TRUST_SCORE_THRESHOLD_CERTIFIED: float = 80.0
+    
+    # ========================================================================
+    # FEATURE FLAGS
+    # ========================================================================
+    FEATURE_ZKP_ENABLED: bool = Field(default=True, env="FEATURE_ZKP_ENABLED")
+    FEATURE_QUANTUM_RESISTANT: bool = Field(default=True, env="FEATURE_QUANTUM_RESISTANT")
+    FEATURE_BLOCKCHAIN_ENABLED: bool = Field(default=True, env="FEATURE_BLOCKCHAIN_ENABLED")
+    FEATURE_ML_VALIDATION: bool = Field(default=True, env="FEATURE_ML_VALIDATION")
+    
+    # ========================================================================
+    # LIMITS & QUOTAS
+    # ========================================================================
+    MAX_FILE_SIZE_MB: int = 100
+    MAX_MODEL_SIZE_GB: int = 5
+    MAX_BATCH_SIZE: int = 100
+    MAX_CONCURRENT_VERIFICATIONS: int = 50
+    
+    # Free tier limits
+    FREE_TIER_REQUESTS_PER_DAY: int = 100
+    FREE_TIER_STORAGE_GB: int = 1
+    
+    # ========================================================================
+    # VALIDATORS
+    # ========================================================================
+    @validator("ENVIRONMENT")
+    def validate_environment(cls, v):
+        allowed = ["development", "staging", "production", "testing"]
+        if v not in allowed:
+            raise ValueError(f"ENVIRONMENT must be one of {allowed}")
+        return v
+    
+    @validator("LOG_LEVEL")
+    def validate_log_level(cls, v):
+        allowed = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+        if v.upper() not in allowed:
+            raise ValueError(f"LOG_LEVEL must be one of {allowed}")
+        return v.upper()
+    
+    @validator("PORT")
+    def validate_port(cls, v):
+        if not 1 <= v <= 65535:
+            raise ValueError("PORT must be between 1 and 65535")
+        return v
+    
+    # ========================================================================
+    # COMPUTED PROPERTIES
+    # ========================================================================
+    @property
+    def is_production(self) -> bool:
+        return self.ENVIRONMENT == "production"
+    
+    @property
+    def is_development(self) -> bool:
+        return self.ENVIRONMENT == "development"
+    
+    @property
+    def database_url_sync(self) -> str:
+        """Get database URL without async prefix"""
+        url = self.DATABASE_URL.get_secret_value()
+        return url.replace("postgresql+asyncpg://", "postgresql://")
+    
+    @property
+    def cors_enabled(self) -> bool:
+        return len(self.ALLOWED_ORIGINS) > 0
+    
+    # ========================================================================
+    # CONFIGURATION
+    # ========================================================================
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+        case_sensitive = True
+        
+        # Allow extra fields for forward compatibility
+        extra = "ignore"
+
+# ============================================================================
+# SETTINGS FACTORY
+# ============================================================================
+
+@lru_cache()
+def get_settings() -> Settings:
+    """
+    Create cached settings instance
+    Use lru_cache to avoid re-reading .env file on every call
+    """
+    return Settings()
+
+# Global settings instance
+settings = get_settings()
+
+# ============================================================================
+# ENVIRONMENT-SPECIFIC OVERRIDES
+# ============================================================================
+
+class DevelopmentSettings(Settings):
+    """Development environment settings"""
+    ENVIRONMENT: str = "development"
+    DEBUG: bool = True
+    LOG_LEVEL: str = "DEBUG"
+    RATE_LIMIT_ENABLED: bool = False
+
+class ProductionSettings(Settings):
+    """Production environment settings"""
+    ENVIRONMENT: str = "production"
+    DEBUG: bool = False
+    LOG_LEVEL: str = "WARNING"
+    RATE_LIMIT_ENABLED: bool = True
+    
+    @validator("SECRET_KEY", "JWT_SECRET_KEY")
+    def validate_production_secrets(cls, v):
+        if v.get_secret_value() in ["changeme", "default", ""]:
+            raise ValueError("Production secrets must be secure!")
+        return v
+
+class TestingSettings(Settings):
+    """Testing environment settings"""
+    ENVIRONMENT: str = "testing"
+    DEBUG: bool = True
+    DATABASE_URL: SecretStr = SecretStr("sqlite:///./test.db")
+    REDIS_URL: str = "redis://localhost:6379/15"
+
+# ============================================================================
+# SETTINGS SELECTOR
+# ============================================================================
+
+def get_settings_for_environment(env: str = None) -> Settings:
+    """Get settings based on environment"""
+    env = env or os.getenv("ENVIRONMENT", "development")
+    
+    settings_map = {
+        "development": DevelopmentSettings,
+        "production": ProductionSettings,
+        "testing": TestingSettings,
+    }
+    
+    settings_class = settings_map.get(env.lower(), Settings)
+    return settings_class()
+
+# ============================================================================
+# USAGE EXAMPLES
+# ============================================================================
+
+if __name__ == "__main__":
+    # Example: Print current configuration
+    print("TrustCert AI Configuration")
+    print("=" * 60)
+    print(f"Environment: {settings.ENVIRONMENT}")
+    print(f"Debug Mode: {settings.DEBUG}")
+    print(f"API Version: {settings.APP_VERSION}")
+    print(f"Database: {settings.DATABASE_URL.get_secret_value()[:30]}...")
+    print(f"Redis: {settings.REDIS_URL}")
+    print(f"Rate Limiting: {settings.RATE_LIMIT_ENABLED}")
+    print(f"Blockchain: {settings.FEATURE_BLOCKCHAIN_ENABLED}")
+    print(f"Trust Score Threshold: {settings.TRUST_SCORE_THRESHOLD_CERTIFIED}")
+    print("=" * 60)
