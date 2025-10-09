@@ -1,287 +1,227 @@
-"""
-TrustCert AI - Main FastAPI Application
-Enterprise-grade API with full features
+TrustCert AI v2.0 - Main Application Entry Point
+Enterprise-grade AI-powered certificate verification system
 """
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.openapi.docs import get_swagger_ui_html
-from contextlib import asynccontextmanager
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 import time
 import logging
-from prometheus_client import Counter, Histogram, make_asgi_app
-import sys
+from contextlib import asynccontextmanager
 
-# Import routes (we'll create these)
-from apps.api.routes import health, auth, verify, certify, blockchain, analytics
+from apps.api.core.config import settings
 from apps.api.core.middleware import (
-    RateLimitMiddleware,
+    SecurityHeadersMiddleware,
     RequestLoggingMiddleware,
-    SecurityHeadersMiddleware
+    RateLimitMiddleware
 )
-from apps.api.core.exceptions import (
-    TrustCertException,
-    ValidationException,
-    AuthenticationException
+from apps.api.routes import (
+    health,
+    auth,
+    verify,
+    certify,
+    blockchain,
+    analytics
 )
-from apps.api.config import settings
-from apps.api.utils.logger import setup_logging
+from apps.api.utils.logger import setup_logger
+from apps.api.utils.metrics import metrics_middleware
 
-# Setup structured logging
-setup_logging()
-logger = logging.getLogger(__name__)
+# Setup logging
+logger = setup_logger(__name__)
 
-# Prometheus metrics
-REQUEST_COUNT = Counter(
-    'trustcert_requests_total',
-    'Total requests',
-    ['method', 'endpoint', 'status']
-)
-REQUEST_DURATION = Histogram(
-    'trustcert_request_duration_seconds',
-    'Request duration',
-    ['method', 'endpoint']
-)
-
-# Lifespan context manager for startup/shutdown
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage application lifecycle"""
-    logger.info("🚀 Starting TrustCert AI API...")
+    """Application lifespan events"""
+    # Startup
+    logger.info("🚀 TrustCert AI v2.0 starting up...")
+    logger.info(f"Environment: {settings.ENVIRONMENT}")
+    logger.info(f"Debug mode: {settings.DEBUG}")
     
-    # Startup: Initialize resources
-    try:
-        # Initialize database connections
-        # await init_db()
-        
-        # Initialize Redis cache
-        # await init_cache()
-        
-        # Initialize blockchain connections
-        # await init_blockchain()
-        
-        # Load ML models
-        # await load_ml_models()
-        
-        logger.info("✅ All services initialized successfully")
-        
-    except Exception as e:
-        logger.error(f"❌ Startup failed: {e}")
-        sys.exit(1)
+    # Initialize database connection
+    # await database.connect()
     
-    yield  # Application runs
+    # Initialize Redis connection
+    # await redis.connect()
     
-    # Shutdown: Cleanup resources
-    logger.info("🛑 Shutting down TrustCert AI API...")
-    # await cleanup()
+    logger.info("✅ All systems operational")
+    
+    yield
+    
+    # Shutdown
+    logger.info("🛑 TrustCert AI shutting down...")
+    # await database.disconnect()
+    # await redis.disconnect()
+    logger.info("👋 Shutdown complete")
 
-# Create FastAPI app
+# Create FastAPI application
 app = FastAPI(
-    title="TrustCert AI API",
+    title="TrustCert AI",
     description="""
-    🧠 **TrustCert AI** - Intelligent Verification Framework
+    🔐 **TrustCert AI v2.0** - Enterprise AI-Powered Certificate Verification System
     
     ## Features
-    - 🔐 Cryptographic Verification (RSA, ECDSA, ZKP)
-    - 🤖 AI Model Certification
-    - ⛓️ Blockchain Integration (Ethereum, IPFS)
-    - 🛡️ ML Safety Validation
-    - 📊 Trust Score Engine
-    - 🔒 Quantum-Resistant Algorithms
+    * 🛡️ Quantum-resistant cryptography
+    * 🔗 Blockchain integration (Ethereum, IPFS)
+    * 🤖 ML-based fraud detection
+    * 📊 Real-time trust scoring
+    * 🌍 Global certificate registry
+    * ⚡ Sub-second verification
     
-    ## Authentication
-    Use API key in header: `X-API-Key: your_api_key`
+    ## Security
+    * Zero-knowledge proofs
+    * End-to-end encryption
+    * Tamper-proof audit trails
+    * Multi-signature verification
     """,
     version="2.0.0",
-    docs_url=None,  # Custom docs
-    redoc_url=None,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
     lifespan=lifespan,
-    openapi_tags=[
-        {"name": "health", "description": "Health check endpoints"},
-        {"name": "auth", "description": "Authentication & authorization"},
-        {"name": "verify", "description": "Verification operations"},
-        {"name": "certify", "description": "Certificate generation"},
-        {"name": "blockchain", "description": "Blockchain operations"},
-        {"name": "analytics", "description": "Analytics & reporting"},
-    ]
+    terms_of_service="https://trustcert.ai/terms",
+    contact={
+        "name": "TrustCert AI Support",
+        "url": "https://trustcert.ai/support",
+        "email": "support@trustcert.ai",
+    },
+    license_info={
+        "name": "Apache 2.0",
+        "url": "https://www.apache.org/licenses/LICENSE-2.0.html",
+    },
 )
 
-# ============================================================================
-# MIDDLEWARE CONFIGURATION
-# ============================================================================
+# ============= MIDDLEWARE CONFIGURATION =============
 
-# CORS - Configure for production
+# CORS Configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+    allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-Request-ID", "X-RateLimit-Remaining"],
+    expose_headers=["X-Request-ID", "X-Process-Time"],
 )
 
-# Gzip compression for responses > 1KB
+# Compression
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# Custom middleware
+# Custom Middleware
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(RateLimitMiddleware)
 
-# ============================================================================
-# EXCEPTION HANDLERS
-# ============================================================================
+# Metrics Middleware
+app.middleware("http")(metrics_middleware)
 
-@app.exception_handler(TrustCertException)
-async def trustcert_exception_handler(request: Request, exc: TrustCertException):
-    """Handle custom TrustCert exceptions"""
+# ============= EXCEPTION HANDLERS =============
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """Handle HTTP exceptions"""
     return JSONResponse(
         status_code=exc.status_code,
         content={
             "error": {
-                "type": exc.error_type,
-                "message": exc.message,
-                "code": exc.error_code,
-                "request_id": request.state.request_id,
-                "timestamp": time.time()
+                "code": exc.status_code,
+                "message": exc.detail,
+                "type": "HTTPException",
+                "request_id": request.state.request_id if hasattr(request.state, "request_id") else None
             }
-        }
+        },
     )
 
-@app.exception_handler(ValidationException)
-async def validation_exception_handler(request: Request, exc: ValidationException):
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Handle validation errors"""
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
             "error": {
-                "type": "validation_error",
-                "message": str(exc),
-                "details": exc.errors,
-                "request_id": request.state.request_id
+                "code": 422,
+                "message": "Validation Error",
+                "type": "ValidationError",
+                "details": exc.errors(),
+                "request_id": request.state.request_id if hasattr(request.state, "request_id") else None
             }
-        }
+        },
     )
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
-    """Catch-all exception handler"""
+    """Handle all other exceptions"""
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
             "error": {
-                "type": "internal_server_error",
-                "message": "An unexpected error occurred",
-                "request_id": getattr(request.state, 'request_id', None)
+                "code": 500,
+                "message": "Internal Server Error",
+                "type": "InternalError",
+                "request_id": request.state.request_id if hasattr(request.state, "request_id") else None
             }
-        }
+        },
     )
 
-# ============================================================================
-# CUSTOM DOCUMENTATION
-# ============================================================================
+# ============= ROUTE REGISTRATION =============
 
-@app.get("/docs", include_in_schema=False)
-async def custom_swagger_ui_html():
-    """Custom Swagger UI with branding"""
-    return get_swagger_ui_html(
-        openapi_url=app.openapi_url,
-        title=f"{app.title} - Interactive Docs",
-        swagger_favicon_url="https://trustcert.ai/favicon.ico",
-        swagger_ui_parameters={
-            "persistAuthorization": True,
-            "displayRequestDuration": True,
-            "filter": True,
-            "tryItOutEnabled": True
-        }
-    )
+# Include routers
+app.include_router(health.router, tags=["Health"])
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
+app.include_router(verify.router, prefix="/api/v1/verify", tags=["Verification"])
+app.include_router(certify.router, prefix="/api/v1/certify", tags=["Certification"])
+app.include_router(blockchain.router, prefix="/api/v1/blockchain", tags=["Blockchain"])
+app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytics"])
 
-# ============================================================================
-# ROUTE REGISTRATION
-# ============================================================================
+# ============= ROOT ENDPOINTS =============
 
-app.include_router(health.router, prefix="/api/v1", tags=["health"])
-app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
-app.include_router(verify.router, prefix="/api/v1/verify", tags=["verify"])
-app.include_router(certify.router, prefix="/api/v1/certify", tags=["certify"])
-app.include_router(blockchain.router, prefix="/api/v1/blockchain", tags=["blockchain"])
-app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["analytics"])
-
-# Prometheus metrics endpoint
-metrics_app = make_asgi_app()
-app.mount("/metrics", metrics_app)
-
-# ============================================================================
-# ROOT ENDPOINT
-# ============================================================================
-
-@app.get("/", tags=["root"])
+@app.get("/", summary="Root Endpoint", response_model=dict)
 async def root():
-    """Root endpoint with API information"""
+    """
+    Root endpoint - API information
+    """
     return {
         "service": "TrustCert AI",
         "version": "2.0.0",
         "status": "operational",
-        "capabilities": {
-            "cryptographic_verification": True,
-            "ai_model_certification": True,
-            "blockchain_integration": True,
-            "ml_safety_validation": True,
-            "trust_scoring": True,
-            "quantum_resistant": True
+        "documentation": "/docs",
+        "environment": settings.ENVIRONMENT,
+        "features": {
+            "quantum_resistant": True,
+            "blockchain_enabled": True,
+            "ml_verification": True,
+            "real_time_scoring": True,
         },
         "endpoints": {
+            "health": "/health",
             "docs": "/docs",
-            "health": "/api/v1/health",
-            "api": "/api/v1",
-            "metrics": "/metrics"
-        },
-        "links": {
-            "documentation": "https://docs.trustcert.ai",
-            "github": "https://github.com/vandoanh1999/Trustcert-ai",
-            "support": "https://support.trustcert.ai"
+            "openapi": "/openapi.json",
         }
     }
 
-# ============================================================================
-# STARTUP MESSAGE
-# ============================================================================
+@app.get("/version", summary="Version Information")
+async def version():
+    """Get detailed version information"""
+    return {
+        "version": "2.0.0",
+        "api_version": "v1",
+        "build": "2024.10.09",
+        "python_version": "3.11",
+        "framework": "FastAPI 0.104.1",
+    }
 
-@app.on_event("startup")
-async def startup_message():
-    """Display startup banner"""
-    banner = """
-    ╔════════════════════════════════════════════════════════════════╗
-    ║                                                                ║
-    ║   ████████╗██████╗ ██╗   ██╗███████╗████████╗                ║
-    ║   ╚══██╔══╝██╔══██╗██║   ██║██╔════╝╚══██╔══╝                ║
-    ║      ██║   ██████╔╝██║   ██║███████╗   ██║                   ║
-    ║      ██║   ██╔══██╗██║   ██║╚════██║   ██║                   ║
-    ║      ██║   ██║  ██║╚██████╔╝███████║   ██║                   ║
-    ║      ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚══════╝   ╚═╝                   ║
-    ║                                                                ║
-    ║              CERT AI - v2.0.0                                  ║
-    ║        Intelligent Verification Framework                      ║
-    ║                                                                ║
-    ╚════════════════════════════════════════════════════════════════╝
-    
-    🚀 Server: http://localhost:8000
-    📚 Docs: http://localhost:8000/docs
-    📊 Metrics: http://localhost:8000/metrics
-    
-    Ready to verify the future of AI! 🧠✨
-    """
-    print(banner)
+# ============= STARTUP MESSAGE =============
 
 if __name__ == "__main__":
     import uvicorn
+    
     uvicorn.run(
-        "main:app",
+        "apps.api.main:app",
         host="0.0.0.0",
         port=8000,
-        reload=True,
+        reload=settings.DEBUG,
         log_level="info",
-        access_log=True
+        access_log=True,
     )
+EOF
