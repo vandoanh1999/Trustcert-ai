@@ -1,0 +1,219 @@
+version: '3.8'
+
+services:
+  # TrustCert AI API
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: trustcert-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - DATABASE_URL=postgresql://trustcert:${DB_PASSWORD}@postgres:5432/trustcert
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - SECRET_KEY=${SECRET_KEY}
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - trustcert-network
+    volumes:
+      - ./logs:/app/logs
+      - ./models:/app/models
+
+  # Celery Beat (Scheduled Tasks)
+  beat:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command: celery -A apps.worker.celery_app beat --loglevel=info
+    container_name: trustcert-beat
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=production
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+    depends_on:
+      - redis
+    networks:
+      - trustcert-network
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: trustcert-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=trustcert
+      - POSTGRES_USER=trustcert
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - trustcert-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trustcert"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis (Cache & Queue)
+  redis:
+    image: redis:7-alpine
+    container_name: trustcert-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - trustcert-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # Nginx (Reverse Proxy)
+  nginx:
+    image: nginx:alpine
+    container_name: trustcert-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - api
+    networks:
+      - trustcert-network
+
+  # Prometheus (Metrics)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: trustcert-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    networks:
+      - trustcert-network
+
+  # Grafana (Monitoring Dashboard)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: trustcert-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./docker/grafana/datasources:/etc/grafana/provisioning/datasources
+    depends_on:
+      - prometheus
+    networks:
+      - trustcert-network
+
+  # IPFS Node (Optional - for local testing)
+  ipfs:
+    image: ipfs/kubo:latest
+    container_name: trustcert-ipfs
+    restart: unless-stopped
+    ports:
+      - "4001:4001"
+      - "5001:5001"
+      - "8080:8080"
+    volumes:
+      - ipfs_data:/data/ipfs
+    networks:
+      - trustcert-network
+
+  # Blockchain Node (Ganache for local testing)
+  ganache:
+    image: trufflesuite/ganache:latest
+    container_name: trustcert-ganache
+    restart: unless-stopped
+    ports:
+      - "8545:8545"
+    command: >
+      --wallet.accounts="0xprivatekey1,1000000000000000000000"
+      --wallet.accounts="0xprivatekey2,1000000000000000000000"
+      --chain.chainId=1337
+      --miner.blockTime=2
+    networks:
+      - trustcert-network
+
+networks:
+  trustcert-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  ipfs_data:
+    driver: local
+  nginx_logs:
+    driver: local=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - SECRET_KEY=${SECRET_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - ETH_RPC_URL=${ETH_RPC_URL}
+      - IPFS_API_KEY=${IPFS_API_KEY}
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - trustcert-network
+    volumes:
+      - ./logs:/app/logs
+      - ./models:/app/models
+      - ./keys:/app/keys:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Celery Worker (Background Tasks)
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command: celery -A apps.worker.celery_app worker --loglevel=info --concurrency=4
+    container_name: trustcert-worker
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=production
+      - DATABASE_URL=postgresql://trustcert:${DB_PASSWORD}@postgres:5432/trustcert
+      - REDIS_URL
